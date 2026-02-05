@@ -1,13 +1,12 @@
 import warnings
 warnings.filterwarnings('ignore')
 
-from langchain.chat_models import ChatOpenAI
-from langchain.prompts import ChatPromptTemplate
-from langchain.chains import LLMChain
-from langchain.chains import SimpleSequentialChain, SequentialChain
-from langchain.chains.router import MultiPromptChain
-from langchain.chains.router.llm_router import LLMRouterChain, RouterOutputParser
-from langchain.prompts import PromptTemplate
+from langchain_openai import ChatOpenAI
+from langchain_core.prompts import ChatPromptTemplate, PromptTemplate
+from langchain_classic.chains import LLMChain
+from langchain_classic.chains import SimpleSequentialChain, SequentialChain
+from langchain_classic.chains.router import MultiPromptChain
+from langchain_classic.chains.router.llm_router import LLMRouterChain, RouterOutputParser
 
 llm = ChatOpenAI(temperature=0.9, base_url="http://localhost:1234/v1", api_key="not-needed")
 
@@ -16,102 +15,85 @@ llm = ChatOpenAI(temperature=0.9, base_url="http://localhost:1234/v1", api_key="
 # PART 1: Simple LLMChain - Single prompt to single response
 # ============================================
 prompt = ChatPromptTemplate.from_template(
-    "Generate a creative product name for a company that makes {product}.")
+    "Generate a creative name for a clothing brand new style of {product}.")
 
 chain = LLMChain(llm=llm, prompt=prompt)
-result = chain.run("eco-friendly water bottles")
+result = chain.run("men polo shirts")
 
-print(f"Product: eco-friendly water bottles\nResult: {result}\n")
+print(f"Product: men polo shirts\nResult: {result}\n")
+
 
 # ============================================
-# PART 2: Simple Sequential Chain - Chain 1 → Chain 2
+# PART 2: Sequential Chain (Multiple outputs)
 # ============================================
 
-# Step 1: Generate product name
+# Step 1: Get sentiment of user escalation message
 first_prompt = ChatPromptTemplate.from_template(
-    "Generate a creative product name for: {product}")
-chain_one = LLMChain(llm=llm, prompt=first_prompt)
-
-# Step 2: Create marketing tagline
-second_prompt = ChatPromptTemplate.from_template(
-    "Write a 10-word marketing tagline for the company: {text}")
-chain_two = LLMChain(llm=llm, prompt=second_prompt)
-
-# Combine chains - output of chain_one becomes input to chain_two
-overall_simple_chain = SimpleSequentialChain(
-    chains=[chain_one, chain_two],
-    verbose=True
-)
-
-overall_simple_chain.run("organic skincare products")
-
-# ============================================
-# PART 3: Sequential Chain (Multiple outputs)
-# ============================================
-
-# Step 1: Translate review to English
-first_prompt = ChatPromptTemplate.from_template(
-    "Translate to English:\n\n{customer_review}")
-chain_one = LLMChain(llm=llm, prompt=first_prompt, output_key="english_review")
+    "Analyse the sentiment of this message:\n\n{customer_message}")
+chain_one = LLMChain(llm=llm, prompt=first_prompt, output_key="sentiment")
 
 # Step 2: Summarize the review
 second_prompt = ChatPromptTemplate.from_template(
-    "Summarize in one sentence:\n\n{english_review}")
+    "Summarize in one sentence:\n\n{customer_message}")
 chain_two = LLMChain(llm=llm, prompt=second_prompt, output_key="summary")
 
-# Step 3: Detect language
+# Step 3: Take action based on sentiment
 third_prompt = ChatPromptTemplate.from_template(
-    "What language is this:\n\n{customer_review}")
-chain_three = LLMChain(llm=llm, prompt=third_prompt, output_key="language")
+    "What action should be taken based on this sentiment:\n\n{summary}")
+chain_three = LLMChain(llm=llm, prompt=third_prompt, output_key="action")
 
-# Step 4: Create response in original language
+# Step 4: Draft an email to address the issue
 fourth_prompt = ChatPromptTemplate.from_template(
-    "Write a professional response in {language}:\n\n{summary}")
-chain_four = LLMChain(llm=llm, prompt=fourth_prompt, output_key="response")
+    "Write an email to the support team to address this action:\n\n{action}")
+chain_four = LLMChain(llm=llm, prompt=fourth_prompt, output_key="email")
 
 # Combine all chains
 overall_chain = SequentialChain(
     chains=[chain_one, chain_two, chain_three, chain_four],
-    input_variables=["customer_review"],
-    output_variables=["english_review", "summary", "language", "response"],
+    input_variables=["customer_message"],
+    output_variables=["sentiment", "summary", "action", "email"],
     verbose=True
 )
 
-review = "¡Este producto es excelente! Llegó rápido y funciona perfectamente."
+review = """I am extremely disappointed with the service. I ordered a laptop two weeks ago and it still hasn't arrived. The customer support has been unhelpful and I want a refund immediately!"""
 result = overall_chain(review)
-print(f"Language: {result['language']}")
+print(f"Sentiment: {result['sentiment']}")
 print(f"Summary: {result['summary']}")
+print(f"Action: {result['action']}")
+print(f"Email: {result['email']}")
 
 # ============================================
-# PART 4: Router Chain (Dynamic routing)
+# PART 3: Router Chain (Dynamic routing)
 # ============================================
 # Define expert templates
-physics_template = """You are a physics expert. Explain concepts clearly and concisely.
+billing_template = """You are a customer support billing specialist.
+Help users with invoices, refunds, and payment issues.
 Question: {input}"""
 
-biology_template = """You are a biology expert. Provide accurate scientific information.
+technical_support_template = """You are a technical support agent.
+Help users troubleshoot errors, bugs, and system issues.
 Question: {input}"""
 
-business_template = """You are a business consultant. Provide strategic insights.
+account_management_template = """You are an account management specialist.
+Help users with account updates, plans, and access issues.
 Question: {input}"""
-
 
 # Store prompt info
 prompt_infos = [
     {
-        "name": "physics", 
-        "description": "Best for physics and motion questions", 
-        "prompt_template": physics_template
+        "name": "billing", 
+        "description": "Best for payment, invoice, and refund questions", 
+        "prompt_template": billing_template
     },
     {
-        "name": "biology", 
-        "description": "Best for biology and life science questions", 
-        "prompt_template": biology_template
+        "name": "technical_support", 
+        "description": "Best for technical issues, bugs, and troubleshooting", 
+        "prompt_template": technical_support_template
     },
     {
-        "name": "business", 
-        "description": "Best for business and strategy questions", 
-        "prompt_template": business_template
+        "name": "account_management", 
+        "description": "Best for account settings, plans, and access issues", 
+        "prompt_template": account_management_template
     },
 ]
 
@@ -166,10 +148,8 @@ router_prompt = PromptTemplate(
     output_parser=RouterOutputParser()  
 )
 
-# Create router chain - remove output_parser parameter
 router_chain = LLMRouterChain.from_llm(llm, router_prompt)
 
-# Combine everything
 multi_chain = MultiPromptChain(
     router_chain=router_chain, 
     destination_chains=destination_chains, 
@@ -178,6 +158,4 @@ multi_chain = MultiPromptChain(
 )
 
 print("\n🎯 Routing questions to experts:\n")
-multi_chain.run("What are key metrics for startup success?")
-
-print("\n✅ All chain types demonstrated successfully!")
+multi_chain.run("I was charged twice for my subscription this month")
