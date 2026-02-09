@@ -1,4 +1,4 @@
-# Lesson 2: Building an Agent with LangGraph and LangChain
+# Build a simple agent with LangGraph and LangChain
 
 from dotenv import load_dotenv
 
