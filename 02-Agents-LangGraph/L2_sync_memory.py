@@ -1,4 +1,4 @@
-# Lesson 4: Memory Persistence
+# Agent With Persistent Memory
 
 from dotenv import load_dotenv
 load_dotenv('.env')
