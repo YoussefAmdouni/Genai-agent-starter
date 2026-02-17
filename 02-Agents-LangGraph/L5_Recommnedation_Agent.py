@@ -426,6 +426,7 @@ async def main():
     """Entry point."""
     await interactive_chatbot()
 
-
+# Testing Prompt
+# I want a running shoe under $150 with a rating above 3.5. Can you find some options for me?
 if __name__ == "__main__":
     asyncio.run(main())
